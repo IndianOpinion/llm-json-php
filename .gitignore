@@ -1,0 +1,4 @@
+/vendor/
+/.phpunit.cache/
+# This is a library: the lock file is not committed.
+/composer.lock
