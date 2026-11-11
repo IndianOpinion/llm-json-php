@@ -1,0 +1,57 @@
+{
+    "name": "indianopinion/llm-json-php",
+    "description": "Structured JSON from OpenRouter, OpenAI or any chat completions endpoint in plain PHP: model chain, cooldowns, credit-exhausted fallback, schema validation and a guard that rejects truncated or corrupted output.",
+    "type": "library",
+    "license": "MIT",
+    "keywords": ["llm", "openai", "openrouter", "json-schema", "structured-output", "fallback", "retry", "wordpress"],
+    "homepage": "https://github.com/IndianOpinion/llm-json-php",
+    "support": {
+        "issues": "https://github.com/IndianOpinion/llm-json-php/issues",
+        "source": "https://github.com/IndianOpinion/llm-json-php",
+        "email": "hello@indianopinion.org"
+    },
+    "authors": [
+        {
+            "name": "Indian Opinion",
+            "email": "hello@indianopinion.org",
+            "homepage": "https://indianopinion.org"
+        }
+    ],
+    "require": {
+        "php": ">=8.1",
+        "ext-json": "*",
+        "ext-pcre": "*"
+    },
+    "require-dev": {
+        "phpstan/phpstan": "^2.1",
+        "phpunit/phpunit": "^10.5",
+        "psr/log": "^3.0",
+        "psr/simple-cache": "^3.0",
+        "squizlabs/php_codesniffer": "^3.10"
+    },
+    "suggest": {
+        "ext-curl": "Used by the default transport. Without it the library falls back to PHP streams, or use WordPressTransport.",
+        "psr/log": "Pass any PSR-3 logger; it is wrapped by Log\\Psr3Logger.",
+        "psr/simple-cache": "Needed for Store\\Psr16Store."
+    },
+    "autoload": {
+        "psr-4": {
+            "IndianOpinion\\LlmJson\\": "src/"
+        }
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "IndianOpinion\\LlmJson\\Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "analyse": "phpstan analyse --no-progress",
+        "lint": "phpcs",
+        "check": ["@lint", "@analyse", "@test"]
+    },
+    "config": {
+        "sort-packages": true
+    },
+    "minimum-stability": "stable"
+}

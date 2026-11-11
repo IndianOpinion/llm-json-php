@@ -1,0 +1,8 @@
+parameters:
+    level: 8
+    paths:
+        - src
+        - bootstrap.php
+    treatPhpDocTypesAsCertain: false
+    scanFiles:
+        - tests/stubs/wordpress.php
