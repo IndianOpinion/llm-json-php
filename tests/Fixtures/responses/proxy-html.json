@@ -1,0 +1,5 @@
+{
+  "status": 200,
+  "headers": {"content-type": "text/html"},
+  "body": "<!DOCTYPE html><html><head><title>Gateway</title></head><body><h1>Please wait</h1></body></html>"
+}

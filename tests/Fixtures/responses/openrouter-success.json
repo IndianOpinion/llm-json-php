@@ -1,0 +1,5 @@
+{
+  "status": 200,
+  "headers": {"content-type": "application/json"},
+  "body": "\n\n         \n{\"id\":\"gen-1741569952-xQa3PzT0hNcv\",\"provider\":\"Example\",\"model\":\"vendor/model-a-20250101\",\"object\":\"chat.completion\",\"created\":1741569952,\"choices\":[{\"logprobs\":null,\"finish_reason\":\"stop\",\"native_finish_reason\":\"stop\",\"index\":0,\"message\":{\"role\":\"assistant\",\"content\":\"{\\\"title\\\":\\\"Monsoon arrives early in Kerala\\\",\\\"paragraphs\\\":[\\\"The monsoon reached the Kerala coast three days ahead of schedule.\\\"],\\\"tags\\\":[\\\"weather\\\"]}\",\"refusal\":null,\"reasoning\":null}}],\"usage\":{\"prompt_tokens\":398,\"completion_tokens\":61,\"total_tokens\":459,\"cost\":0.0001205,\"is_byok\":false,\"prompt_tokens_details\":{\"cached_tokens\":0},\"cost_details\":{\"upstream_inference_cost\":null},\"completion_tokens_details\":{\"reasoning_tokens\":12}}}"
+}

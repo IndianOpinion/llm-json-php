@@ -1,0 +1,11 @@
+{
+  "status": 200,
+  "headers": {"content-type": "application/json"},
+  "body": {
+    "id": "gen-choice-error",
+    "model": "vendor/model-a",
+    "choices": [
+      {"index": 0, "error": {"code": 502, "message": "Provider disconnected mid-stream"}, "finish_reason": "error", "message": {"role": "assistant", "content": ""}}
+    ]
+  }
+}

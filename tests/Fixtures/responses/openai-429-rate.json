@@ -1,0 +1,5 @@
+{
+  "status": 429,
+  "headers": {"content-type": "application/json", "retry-after": "3"},
+  "body": {"error": {"message": "Rate limit reached for requests per min. Please try again in 3s.", "type": "requests", "param": null, "code": "rate_limit_exceeded"}}
+}
