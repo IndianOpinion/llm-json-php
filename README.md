@@ -48,6 +48,21 @@ require __DIR__ . '/lib/llm-json-php/bootstrap.php';
 
 ## Quick start
 
+The first call, in five lines:
+
+```php
+use IndianOpinion\LlmJson\{Chain, Client, Provider, Route, Schema};
+
+$client = Client::create(Chain::of(Route::to(Provider::openRouter((string) getenv('OPENROUTER_API_KEY')), 'openai/gpt-4o-mini')));
+$schema = Schema::fromArray('answer', ['type' => 'object', 'properties' => ['answer' => ['type' => 'string']], 'required' => ['answer'], 'additionalProperties' => false]);
+$data = $client->ask('demo', $schema, 'Answer in one sentence.', 'Why is the sky blue?');
+echo $data['answer'];
+```
+
+`ask()` returns the validated array or throws. For production you want a
+fallback chain, a shared store for cooldowns, the full `Result`, and the
+two exceptions worth catching:
+
 ```php
 use IndianOpinion\LlmJson\Chain;
 use IndianOpinion\LlmJson\Client;
@@ -217,7 +232,8 @@ foreach ($result->attempts() as $a) {
         $a->outcome->value, $a->httpStatus ?? '-', $a->durationMs);
 }
 $result->skips();             // routes passed over, and why
-$result->totalUsage()->cost;  // every billed attempt, failures included
+$result->totalUsage()->cost;  // every billed attempt, failures included;
+                              // costSource Partial means a lower bound
 $result->guardReport();       // repairs, earlier rejections, regeneration
 ```
 

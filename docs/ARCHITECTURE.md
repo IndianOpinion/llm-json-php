@@ -125,6 +125,42 @@ with a fixed prefix. No key material is ever stored.
   is reported as an ignored keyword. Annotations (`description`, `title`,
   `default`, `examples`, `$comment`, `$schema`, `$id`) are accepted and not
   reported.
+- **Objects and arrays.** The client decodes the output twice: once with
+  objects, which the validator checks, so `{}` and `[]`, and an array and
+  an object whose keys are `"0"`, `"1"`, are told apart exactly; then as
+  associative arrays, which the guard and the caller get. `Validator`
+  still accepts an associative array, with that ambiguity documented.
+- **Repairs are re-validated.** When the guard repaired anything, the
+  repaired data is validated against the schema again. A repair that
+  empties a string under its `minLength` or cuts a list under `minItems`
+  is a rejection (rule G2, retryable), never a silent change of shape.
+- **G6 repair and lower case.** A terminator followed by a lower-case
+  word (`He said "Stop." and left`) is not a sentence end, as well as a
+  full stop after an abbreviation or an initial.
+- **`$ref` depth.** The limit of 32 counts references followed in a row
+  without descending into the data, so it only trips on a cycle. A
+  recursive schema (a tree of nodes) is bounded by the JSON nesting limit
+  of 64. A pure cycle (`a` refers to `b`, `b` to `a`) is rejected when the
+  `Schema` is built. Schema keyword values (`minimum`, `minLength`,
+  `multipleOf` and the rest) are type-checked at construction too.
+- **Finish reason `error`.** OpenRouter's normalised finish reason for an
+  upstream failure during generation is a provider error (retryable),
+  whatever the content looks like.
+- **Partial cost.** `Result::totalUsage()` sums every attempt. When some
+  billed attempt (a 2xx answer) has no known cost but others do, the
+  total's source is `CostSource::Partial`: the figure is a lower bound.
+- **Extra body fields.** `stream` and `n` are refused as well as the owned
+  fields: the library reads one non-streamed answer per attempt.
+- **Keys and stack traces.** API key parameters carry
+  `#[\SensitiveParameter]`, so PHP 8.2 and later leave them out of stack
+  traces. A custom transport's exception message is redacted with the
+  provider key before it is kept.
+- **File store expiry.** Expired entries are removed under the key's lock
+  and re-read inside it, so a sweep never deletes a value another process
+  has just written.
+- **WordPress `set_transient()`.** It returns false when the value is
+  unchanged. The store treats false as a failure only when reading the key
+  back does not give the value.
 - **Integers.** Only PHP integers pass an `integer` type. A JSON `1.0`
   fails. This keeps case 45 strict.
 - **Redirects.** A 3xx is recorded as outcome `redirect` with an
@@ -164,7 +200,8 @@ with a fixed prefix. No key material is ever stored.
   cap, the route is not retried and the next route is tried.
 - **Deadline.** Checked before every attempt and before every sleep. A
   retry whose sleep would leave less than the minimum useful time is not
-  started.
+  started; the call moves on to the next route, which needs no wait. If
+  nothing later answers, the exception's reason is `deadline`.
 - **Day counter.** Incremented once per failed call, including deadline
   failures, never by a failed G8 regeneration (the call succeeded).
 - **Regeneration.** Runs through the whole chain, with cooldowns and holds
