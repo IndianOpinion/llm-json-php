@@ -15,6 +15,7 @@
     <rule ref="PSR1.Files.SideEffects.FoundWithSymbols">
         <exclude-pattern>bootstrap.php</exclude-pattern>
         <exclude-pattern>tests/bootstrap.php</exclude-pattern>
+        <exclude-pattern>examples/wordpress-plugin.php</exclude-pattern>
         <exclude-pattern>tests/stubs/*</exclude-pattern>
     </rule>
     <rule ref="PSR1.Classes.ClassDeclaration.MissingNamespace">
