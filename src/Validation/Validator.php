@@ -12,19 +12,28 @@ use IndianOpinion\LlmJson\Schema;
 /**
  * Validates decoded output against the keywords allowed in strict
  * structured outputs. Unsupported keywords are ignored.
+ *
+ * Pass the output decoded with objects (json_decode($json, false)) to tell
+ * a JSON object from a JSON array exactly; the client does. An associative
+ * PHP array is accepted too, but then {} and [] look the same, and so do an
+ * array and an object whose keys are "0", "1", ...
  */
 final class Validator
 {
     public const MAX_REF_DEPTH = 32;
 
+    /** True while validating a tree decoded with objects: then every PHP array is a JSON array. */
+    private bool $exact = false;
+
     /**
-     * @param array<mixed> $data
+     * @param array<mixed>|\stdClass $data
      *
      * @throws SchemaViolationException
      * @throws ConfigurationException on a $ref chain deeper than 32
      */
-    public function validate(Schema $schema, array $data): void
+    public function validate(Schema $schema, array|\stdClass $data): void
     {
+        $this->exact = $data instanceof \stdClass;
         $error = $this->check($schema, $schema->toArray(), $data, '', 0);
         if ($error !== null) {
             throw new SchemaViolationException(sprintf('Schema violation at %s: %s', $error[0] === '' ? '/' : $error[0], $error[1]), $error[0]);
@@ -38,6 +47,9 @@ final class Validator
      */
     private function check(Schema $schema, array $node, mixed $value, string $path, int $refDepth): ?array
     {
+        // $refDepth counts $ref hops taken without descending into the data,
+        // so it only grows on a reference cycle. Recursive schemas (a tree of
+        // nodes) are bounded by the JSON nesting limit instead.
         if (isset($node['$ref']) && is_string($node['$ref'])) {
             if ($refDepth >= self::MAX_REF_DEPTH) {
                 throw new ConfigurationException(sprintf('Schema "%s": $ref nesting deeper than %d at %s.', $schema->name(), self::MAX_REF_DEPTH, $path === '' ? '/' : $path));
@@ -71,7 +83,7 @@ final class Validator
             $types = (array) $node['type'];
             $ok = false;
             foreach ($types as $type) {
-                if (self::isType($value, (string) $type)) {
+                if ($this->isType($value, (string) $type)) {
                     $ok = true;
                     break;
                 }
@@ -131,14 +143,19 @@ final class Validator
             }
         }
 
-        if (is_array($value)) {
+        if ($value instanceof \stdClass) {
+            $error = $this->checkObject($schema, $node, get_object_vars($value), $path);
+            if ($error !== null) {
+                return $error;
+            }
+        } elseif (is_array($value)) {
             $isList = array_is_list($value);
             $types = isset($node['type']) ? (array) $node['type'] : [];
-            $treatAsObject = !$isList || ($value === [] && (in_array('object', $types, true) || isset($node['properties'])));
+            $treatAsObject = !$isList || (!$this->exact && $value === [] && (in_array('object', $types, true) || isset($node['properties'])));
             if ($treatAsObject) {
-                $error = $this->checkObject($schema, $node, $value, $path, $refDepth);
+                $error = $this->checkObject($schema, $node, $value, $path);
             } else {
-                $error = $this->checkArray($schema, $node, $value, $path, $refDepth);
+                $error = $this->checkArray($schema, $node, $value, $path);
             }
             if ($error !== null) {
                 return $error;
@@ -154,7 +171,7 @@ final class Validator
      *
      * @return array{0: string, 1: string}|null
      */
-    private function checkObject(Schema $schema, array $node, array $value, string $path, int $refDepth): ?array
+    private function checkObject(Schema $schema, array $node, array $value, string $path): ?array
     {
         foreach ((array) ($node['required'] ?? []) as $key) {
             if (!array_key_exists((string) $key, $value)) {
@@ -167,7 +184,7 @@ final class Validator
             $key = (string) $key;
             $childPath = $path . '/' . self::escape($key);
             if (array_key_exists($key, $properties) && is_array($properties[$key])) {
-                $error = $this->check($schema, $properties[$key], $child, $childPath, $refDepth);
+                $error = $this->check($schema, $properties[$key], $child, $childPath, 0);
                 if ($error !== null) {
                     return $error;
                 }
@@ -177,7 +194,7 @@ final class Validator
                 return [$childPath, 'key is not allowed (additionalProperties is false)'];
             }
             if (is_array($additional)) {
-                $error = $this->check($schema, $additional, $child, $childPath, $refDepth);
+                $error = $this->check($schema, $additional, $child, $childPath, 0);
                 if ($error !== null) {
                     return $error;
                 }
@@ -193,7 +210,7 @@ final class Validator
      *
      * @return array{0: string, 1: string}|null
      */
-    private function checkArray(Schema $schema, array $node, array $value, string $path, int $refDepth): ?array
+    private function checkArray(Schema $schema, array $node, array $value, string $path): ?array
     {
         $count = count($value);
         if (isset($node['minItems']) && $count < (int) $node['minItems']) {
@@ -204,7 +221,7 @@ final class Validator
         }
         if (isset($node['items']) && is_array($node['items'])) {
             foreach ($value as $i => $item) {
-                $error = $this->check($schema, $node['items'], $item, $path . '/' . $i, $refDepth);
+                $error = $this->check($schema, $node['items'], $item, $path . '/' . $i, 0);
                 if ($error !== null) {
                     return $error;
                 }
@@ -214,10 +231,10 @@ final class Validator
         return null;
     }
 
-    private static function isType(mixed $value, string $type): bool
+    private function isType(mixed $value, string $type): bool
     {
         return match ($type) {
-            'object' => is_array($value) && ($value === [] || !array_is_list($value)),
+            'object' => $value instanceof \stdClass || (!$this->exact && is_array($value) && ($value === [] || !array_is_list($value))),
             'array' => is_array($value) && array_is_list($value),
             'string' => is_string($value),
             'integer' => is_int($value),
@@ -230,6 +247,8 @@ final class Validator
 
     private static function equals(mixed $a, mixed $b): bool
     {
+        $a = self::plain($a);
+        $b = self::plain($b);
         if ((is_int($a) || is_float($a)) && (is_int($b) || is_float($b))) {
             return (float) $a === (float) $b;
         }
@@ -237,10 +256,24 @@ final class Validator
         return $a === $b;
     }
 
+    /** Objects decoded as stdClass become associative arrays, for comparison. */
+    private static function plain(mixed $value): mixed
+    {
+        if ($value instanceof \stdClass) {
+            $value = get_object_vars($value);
+        }
+        if (is_array($value)) {
+            return array_map(self::plain(...), $value);
+        }
+
+        return $value;
+    }
+
     private static function describe(mixed $value): string
     {
         return match (true) {
             $value === null => 'null',
+            $value instanceof \stdClass => 'object',
             is_bool($value) => 'boolean',
             is_int($value) => 'integer',
             is_float($value) => 'number',

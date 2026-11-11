@@ -225,7 +225,28 @@ final class Schema
                     if (!is_string($value)) {
                         throw new ConfigurationException(sprintf('Schema "%s": %s must be a string.', $this->name, $here));
                     }
-                    $this->resolveRef($value);
+                    $this->assertRefChainEnds($value, $here);
+                    break;
+                case 'minimum':
+                case 'maximum':
+                case 'exclusiveMinimum':
+                case 'exclusiveMaximum':
+                    if (!is_int($value) && !is_float($value)) {
+                        throw new ConfigurationException(sprintf('Schema "%s": %s must be a number.', $this->name, $here));
+                    }
+                    break;
+                case 'multipleOf':
+                    if ((!is_int($value) && !is_float($value)) || $value <= 0) {
+                        throw new ConfigurationException(sprintf('Schema "%s": %s must be a number above zero.', $this->name, $here));
+                    }
+                    break;
+                case 'minItems':
+                case 'maxItems':
+                case 'minLength':
+                case 'maxLength':
+                    if (!is_int($value) || $value < 0) {
+                        throw new ConfigurationException(sprintf('Schema "%s": %s must be a whole number of zero or more.', $this->name, $here));
+                    }
                     break;
                 case 'type':
                     $types = is_array($value) ? $value : [$value];
@@ -236,6 +257,22 @@ final class Schema
                     }
                     break;
             }
+        }
+    }
+
+    /**
+     * Follow a chain of references that point straight at other references.
+     * A chain longer than the validator's limit is a cycle: fail now, at
+     * construction, rather than on the first model answer.
+     */
+    private function assertRefChainEnds(string $ref, string $path): void
+    {
+        $node = $this->resolveRef($ref);
+        for ($hops = 1; isset($node['$ref']) && is_string($node['$ref']); $hops++) {
+            if ($hops >= Validation\Validator::MAX_REF_DEPTH) {
+                throw new ConfigurationException(sprintf('Schema "%s": $ref at %s is a cycle (more than %d references in a row).', $this->name, $path, Validation\Validator::MAX_REF_DEPTH));
+            }
+            $node = $this->resolveRef($node['$ref']);
         }
     }
 

@@ -152,7 +152,7 @@ final class SchemaValidationTest extends TestCase
         self::one(['type' => 'string', 'pattern' => '([a-z']);
     }
 
-    public function testT66RefDepthLimit(): void
+    public function testT66RecursiveSchemaFollowsTheDataNotARefLimit(): void
     {
         $schema = Schema::fromArray('tree', [
             'type' => 'object',
@@ -161,8 +161,8 @@ final class SchemaValidationTest extends TestCase
             'required' => ['root'],
             'additionalProperties' => false,
         ]);
-        $build = static function (int $depth): array {
-            $node = ['child' => null];
+        $build = static function (int $depth, mixed $leaf = null): array {
+            $node = ['child' => $leaf];
             for ($i = 0; $i < $depth; $i++) {
                 $node = ['child' => $node];
             }
@@ -170,17 +170,61 @@ final class SchemaValidationTest extends TestCase
             return ['root' => $node];
         };
         $validator = new Validator();
-        $validator->validate($schema, $build(10));
-        $this->expectException(ConfigurationException::class);
+        // A legitimate tree deeper than 32 levels is valid; the data, not a
+        // $ref counter, bounds the recursion (JSON nesting stops at 64).
         $validator->validate($schema, $build(40));
+        $this->expectException(SchemaViolationException::class);
+        $validator->validate($schema, $build(40, 'leaf'));
     }
 
-    public function testT66CyclicRefThroughClient(): void
+    public function testT66RefCycleThrowsAtConstruction(): void
     {
-        $schema = Schema::fromArray('loop', ['type' => 'object', '$defs' => ['a' => ['$ref' => '#/$defs/b'], 'b' => ['$ref' => '#/$defs/a']], 'properties' => ['v' => ['$ref' => '#/$defs/a']], 'required' => ['v'], 'additionalProperties' => false]);
+        $this->expectException(ConfigurationException::class);
+        $this->expectExceptionMessage('cycle');
+        Schema::fromArray('loop', ['type' => 'object', '$defs' => ['a' => ['$ref' => '#/$defs/b'], 'b' => ['$ref' => '#/$defs/a']], 'properties' => ['v' => ['$ref' => '#/$defs/a']], 'required' => ['v'], 'additionalProperties' => false]);
+    }
+
+    public function testT66CycleThroughAnyOfThrowsAtCallTime(): void
+    {
+        $schema = Schema::fromArray('loop', ['type' => 'object', '$defs' => ['a' => ['anyOf' => [['$ref' => '#/$defs/a']]]], 'properties' => ['v' => ['$ref' => '#/$defs/a']], 'required' => ['v'], 'additionalProperties' => false]);
         $this->transport->push(MockTransport::completion('{"v":1}'));
         $this->expectException(ConfigurationException::class);
         $this->client()->complete($this->request($schema));
+    }
+
+    public function testObjectIsNotAcceptedForAnArrayAndViceVersa(): void
+    {
+        $schema = Schema::fromArray('t', ['type' => 'object', 'properties' => [
+            'tags' => ['type' => 'array', 'items' => ['type' => 'string']],
+            'meta' => ['type' => 'object', 'properties' => [], 'additionalProperties' => false],
+        ], 'required' => ['tags', 'meta'], 'additionalProperties' => false]);
+        $validator = new Validator();
+        $validator->validate($schema, json_decode('{"tags":[],"meta":{}}', false));
+        foreach (['{"tags":{"0":"a"},"meta":{}}', '{"tags":{},"meta":{}}', '{"tags":[],"meta":[]}'] as $json) {
+            try {
+                $validator->validate($schema, json_decode($json, false));
+                self::fail('accepted ' . $json);
+            } catch (SchemaViolationException) {
+                self::addToAssertionCount(1);
+            }
+        }
+        // Through the client: an object where an array belongs is retried.
+        $this->transport->push(MockTransport::completion('{"tags":{"0":"a"},"meta":{}}'), MockTransport::completion('{"tags":["a"],"meta":{}}'));
+        $result = $this->client()->complete($this->request($schema));
+        self::assertSame(['tags' => ['a'], 'meta' => []], $result->data());
+        self::assertSame(Outcome::SchemaViolation, $result->attempts()[0]->outcome);
+    }
+
+    public function testSchemaKeywordValuesAreChecked(): void
+    {
+        foreach ([['minimum' => 'x'], ['minLength' => -1], ['maxItems' => 1.5], ['multipleOf' => 0]] as $bad) {
+            try {
+                Schema::fromArray('t', ['type' => 'object', 'properties' => ['v' => ['type' => 'number'] + $bad]]);
+                self::fail('accepted ' . json_encode($bad));
+            } catch (ConfigurationException) {
+                self::addToAssertionCount(1);
+            }
+        }
     }
 
     public function testT67StrictOutputIsStillValidated(): void
