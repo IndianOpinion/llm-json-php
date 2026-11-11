@@ -1,0 +1,32 @@
+{
+  "status": 200,
+  "headers": {"content-type": "application/json", "x-request-id": "req_8f2c1a7d"},
+  "body": {
+    "id": "chatcmpl-B9MBs8CjcvOU2jLn4n570S5qMJKcT",
+    "object": "chat.completion",
+    "created": 1741569952,
+    "model": "gpt-4o-mini-2024-07-18",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "{\"title\":\"Monsoon arrives early in Kerala\",\"paragraphs\":[\"The monsoon reached the Kerala coast three days ahead of schedule.\",\"Farmers welcomed the rain.\"],\"tags\":[\"weather\",\"kerala\"]}",
+          "refusal": null,
+          "annotations": []
+        },
+        "logprobs": null,
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 412,
+      "completion_tokens": 58,
+      "total_tokens": 470,
+      "prompt_tokens_details": {"cached_tokens": 128, "audio_tokens": 0},
+      "completion_tokens_details": {"reasoning_tokens": 0, "audio_tokens": 0, "accepted_prediction_tokens": 0, "rejected_prediction_tokens": 0}
+    },
+    "service_tier": "default",
+    "system_fingerprint": "fp_06737a9306"
+  }
+}

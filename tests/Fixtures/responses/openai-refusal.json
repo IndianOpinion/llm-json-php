@@ -1,0 +1,17 @@
+{
+  "status": 200,
+  "headers": {"content-type": "application/json"},
+  "body": {
+    "id": "chatcmpl-refusal01",
+    "object": "chat.completion",
+    "model": "gpt-4o-2024-08-06",
+    "choices": [
+      {
+        "index": 0,
+        "message": {"role": "assistant", "content": null, "refusal": "I'm sorry, I can't help with that request."},
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {"prompt_tokens": 120, "completion_tokens": 11, "total_tokens": 131}
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "status": 200,
+  "headers": {"content-type": "application/json"},
+  "body": {
+    "id": "chatcmpl-length",
+    "model": "gpt-4o-mini",
+    "choices": [
+      {"index": 0, "message": {"role": "assistant", "content": "{\"title\":\"Short\",\"paragraphs\":[\"Done.\"],\"tags\":[]}"}, "finish_reason": "length"}
+    ],
+    "usage": {"prompt_tokens": 400, "completion_tokens": 8192, "total_tokens": 8592}
+  }
+}

@@ -1,0 +1,30 @@
+<?xml version="1.0"?>
+<ruleset name="llm-json-php">
+    <description>PSR-12 for llm-json-php.</description>
+    <file>src</file>
+    <file>tests</file>
+    <file>examples</file>
+    <file>bootstrap.php</file>
+    <exclude-pattern>tests/Fixtures/*</exclude-pattern>
+    <arg name="extensions" value="php"/>
+    <arg name="colors"/>
+    <arg value="sp"/>
+    <rule ref="PSR12">
+        <exclude name="Generic.Files.LineLength"/>
+    </rule>
+    <rule ref="PSR1.Files.SideEffects.FoundWithSymbols">
+        <exclude-pattern>bootstrap.php</exclude-pattern>
+        <exclude-pattern>tests/bootstrap.php</exclude-pattern>
+        <exclude-pattern>examples/wordpress-plugin.php</exclude-pattern>
+        <exclude-pattern>tests/stubs/*</exclude-pattern>
+    </rule>
+    <rule ref="PSR1.Classes.ClassDeclaration.MissingNamespace">
+        <exclude-pattern>tests/stubs/*</exclude-pattern>
+    </rule>
+    <rule ref="PSR1.Methods.CamelCapsMethodName.NotCamelCaps">
+        <exclude-pattern>tests/stubs/*</exclude-pattern>
+    </rule>
+    <rule ref="Squiz.Classes.ValidClassName.NotCamelCaps">
+        <exclude-pattern>tests/stubs/*</exclude-pattern>
+    </rule>
+</ruleset>
