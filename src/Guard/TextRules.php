@@ -141,7 +141,9 @@ final class TextRules
 
     /**
      * G6 repair: the value cut back to the end of its last complete
-     * sentence, or '' when it has none. Never cuts inside a sentence.
+     * sentence, or '' when it has none. Never cuts inside a sentence: a
+     * full stop after an abbreviation or an initial, and a terminator
+     * followed by a lower-case word, are not sentence ends.
      *
      * @param list<string> $abbreviations lower case, without the final full stop
      */
@@ -155,6 +157,11 @@ final class TextRules
         for ($i = count($m[0]) - 1; $i >= 0; $i--) {
             [$match, $offset] = $m[0][$i];
             if (self::isAbbreviation($s, (int) $offset, $match, $lookup)) {
+                continue;
+            }
+            // A sentence never goes on in lower case: in 'He said "Stop."
+            // and left', the quoted full stop is not where the sentence ends.
+            if (preg_match('/\G[\s\x{00A0}]*(?:<[^>]*>[\s\x{00A0}]*)*\p{Ll}/u', $s, $next, 0, (int) $offset + strlen($match)) === 1) {
                 continue;
             }
 

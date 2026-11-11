@@ -90,7 +90,10 @@ final class WordPressTransientStore implements Store
 
     public function set(string $key, int $value, int $ttl): void
     {
-        if ($this->invoke($this->setFn, $this->check($key), $value, max(1, $ttl)) === false) {
+        if ($this->invoke($this->setFn, $this->check($key), $value, max(1, $ttl)) === false && $this->get($key) !== $value) {
+            // set_transient() also returns false when the stored value is
+            // unchanged (update_option() reports "no change" as false); only
+            // a value that did not land is a failure.
             throw new StoreException('WordPress refused to save a transient.');
         }
     }

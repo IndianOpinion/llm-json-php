@@ -92,7 +92,7 @@ final class BodyBuilder
         }
 
         foreach ($route->extraBody() as $field => $value) {
-            if (in_array($field, ['model', 'messages', 'response_format', $provider->tokenParameter()], true)) {
+            if (in_array($field, ['model', 'messages', 'response_format', 'stream', 'n', 'max_tokens', 'max_completion_tokens', $provider->tokenParameter()], true)) {
                 throw new ConfigurationException(sprintf('Extra body field "%s" would overwrite a field the library owns.', $field));
             }
             $body[$field] = $value;

@@ -48,6 +48,7 @@ final class Provider
         private readonly string $name,
         private readonly ProviderKind $kind,
         string $baseUrl,
+        #[\SensitiveParameter]
         private readonly string $apiKey,
         private readonly bool $keyless,
         private readonly bool $allowPlainHttp,
@@ -71,7 +72,7 @@ final class Provider
      * OpenRouter. The referer and title are OpenRouter's optional
      * attribution headers and are sent only when given.
      */
-    public static function openRouter(string $apiKey, ?string $referer = null, ?string $title = null, string $name = 'openrouter'): self
+    public static function openRouter(#[\SensitiveParameter] string $apiKey, ?string $referer = null, ?string $title = null, string $name = 'openrouter'): self
     {
         $provider = new self($name, ProviderKind::OpenRouter, self::OPENROUTER_URL, $apiKey, false, false);
         $headers = [];
@@ -85,7 +86,7 @@ final class Provider
         return $headers === [] ? $provider : $provider->withHeaders($headers);
     }
 
-    public static function openAi(string $apiKey, string $name = 'openai'): self
+    public static function openAi(#[\SensitiveParameter] string $apiKey, string $name = 'openai'): self
     {
         return new self($name, ProviderKind::OpenAi, self::OPENAI_URL, $apiKey, false, false);
     }
@@ -97,6 +98,7 @@ final class Provider
     public static function generic(
         string $name,
         string $baseUrl,
+        #[\SensitiveParameter]
         string $apiKey = '',
         bool $keyless = false,
         bool $allowPlainHttp = false,

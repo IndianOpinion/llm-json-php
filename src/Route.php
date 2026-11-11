@@ -12,7 +12,7 @@ use IndianOpinion\LlmJson\Exception\ConfigurationException;
 final class Route
 {
     /** Body fields that extra body fields may never overwrite. */
-    private const PROTECTED_FIELDS = ['model', 'messages', 'response_format', 'max_tokens', 'max_completion_tokens'];
+    private const PROTECTED_FIELDS = ['model', 'messages', 'response_format', 'max_tokens', 'max_completion_tokens', 'stream', 'n'];
 
     private OutputMode $mode = OutputMode::Auto;
     private ?int $attempts = null;
@@ -135,7 +135,8 @@ final class Route
 
     /**
      * Extra body fields such as seed or top_p, merged last. They may not
-     * set model, messages, response_format or the token cap.
+     * set model, messages, response_format, the token cap, stream (not
+     * supported) or n (one answer per attempt).
      *
      * @param array<string, mixed> $fields
      */
@@ -154,7 +155,7 @@ final class Route
 
     public function withTimeouts(?float $connectSeconds, ?float $requestSeconds): self
     {
-        if (($connectSeconds !== null && $connectSeconds <= 0) || ($requestSeconds !== null && $requestSeconds <= 0)) {
+        if (($connectSeconds !== null && (!($connectSeconds > 0) || !is_finite($connectSeconds))) || ($requestSeconds !== null && (!($requestSeconds > 0) || !is_finite($requestSeconds)))) {
             throw new ConfigurationException('Timeouts must be greater than zero.');
         }
         $clone = clone $this;

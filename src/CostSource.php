@@ -14,4 +14,9 @@ enum CostSource: string
     case Unknown = 'unknown';
     /** A total over attempts whose sources differ. */
     case Mixed = 'mixed';
+    /**
+     * A total where at least one billed attempt (an HTTP 2xx answer) has an
+     * unknown cost. The figure is a lower bound, not the whole spend.
+     */
+    case Partial = 'partial';
 }

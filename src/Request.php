@@ -108,7 +108,7 @@ final class Request
 
     public function withTimeouts(?float $connectSeconds, ?float $requestSeconds): self
     {
-        if (($connectSeconds !== null && $connectSeconds <= 0) || ($requestSeconds !== null && $requestSeconds <= 0)) {
+        if (($connectSeconds !== null && (!($connectSeconds > 0) || !is_finite($connectSeconds))) || ($requestSeconds !== null && (!($requestSeconds > 0) || !is_finite($requestSeconds)))) {
             throw new ConfigurationException('Timeouts must be greater than zero.');
         }
         $clone = clone $this;
@@ -121,7 +121,7 @@ final class Request
     /** Total time budget for this call, in seconds. */
     public function withDeadline(float $seconds): self
     {
-        if ($seconds <= 0) {
+        if (!($seconds > 0)) {
             throw new ConfigurationException('Deadline must be greater than zero.');
         }
         $clone = clone $this;

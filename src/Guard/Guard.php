@@ -119,6 +119,9 @@ final class Guard
             $rules[] = Rule::CUSTOM . ':' . $name;
             try {
                 $found = $rule($data);
+                if (!is_iterable($found)) {
+                    throw new \UnexpectedValueException(sprintf('a rule must return an iterable of violations, got %s', get_debug_type($found)));
+                }
                 foreach ($found as $item) {
                     if ($item instanceof Violation) {
                         $violations[] = $item;

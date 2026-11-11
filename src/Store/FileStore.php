@@ -55,7 +55,7 @@ final class FileStore implements Store
             return null;
         }
         if ($entry['e'] <= $this->clock->now()) {
-            $this->unlink($path);
+            $this->removeIfExpired($path);
 
             return null;
         }
@@ -111,16 +111,12 @@ final class FileStore implements Store
         }
         $looked = 0;
         $removed = 0;
-        $now = $this->clock->now();
         while ($looked < $limit && ($name = readdir($handle)) !== false) {
             if (preg_match('/^[0-9a-f]{64}\.json$/', $name) !== 1) {
                 continue;
             }
             $looked++;
-            $path = $this->directory . '/' . $name;
-            $entry = $this->read($path);
-            if ($entry === null || $entry['e'] <= $now) {
-                $this->unlink($path);
+            if ($this->removeIfExpired($this->directory . '/' . $name)) {
                 $removed++;
             }
         }
@@ -198,6 +194,40 @@ final class FileStore implements Store
                 ErrorTrap::run(static fn (): bool => unlink($tmp));
             }
             throw new StoreException('FileStore could not write an entry: ' . ($warning ?? 'unknown error'));
+        }
+    }
+
+    /**
+     * Remove an expired entry under its key lock, re-reading it inside the
+     * lock, so a fresh value written by another process between our read
+     * and the unlink is never deleted. A busy lock means someone is writing
+     * it: leave it alone.
+     */
+    private function removeIfExpired(string $path): bool
+    {
+        $lockPath = substr($path, 0, -5) . '.lock';
+        [$handle] = ErrorTrap::run(static fn () => fopen($lockPath, 'c'));
+        if (!is_resource($handle)) {
+            return false;
+        }
+        try {
+            if (!flock($handle, LOCK_EX | LOCK_NB)) {
+                return false;
+            }
+            try {
+                $entry = $this->read($path);
+            } catch (StoreException) {
+                $entry = null;
+            }
+            if ($entry !== null && $entry['e'] > $this->clock->now()) {
+                return false;
+            }
+            $this->unlink($path);
+
+            return true;
+        } finally {
+            flock($handle, LOCK_UN);
+            fclose($handle);
         }
     }
 

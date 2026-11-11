@@ -18,6 +18,8 @@ use IndianOpinion\LlmJson\Guard\Guard;
 use IndianOpinion\LlmJson\Guard\GuardOutcome;
 use IndianOpinion\LlmJson\Guard\GuardProfile;
 use IndianOpinion\LlmJson\Guard\GuardReport;
+use IndianOpinion\LlmJson\Guard\Rule;
+use IndianOpinion\LlmJson\Guard\Violation;
 use IndianOpinion\LlmJson\Internal\BodyBuilder;
 use IndianOpinion\LlmJson\Internal\CallState;
 use IndianOpinion\LlmJson\Internal\Classified;
@@ -26,6 +28,7 @@ use IndianOpinion\LlmJson\Internal\DecodeFailure;
 use IndianOpinion\LlmJson\Internal\Json;
 use IndianOpinion\LlmJson\Internal\Keys;
 use IndianOpinion\LlmJson\Internal\ProcessMemory;
+use IndianOpinion\LlmJson\Internal\Redactor;
 use IndianOpinion\LlmJson\Internal\ResponseReader;
 use IndianOpinion\LlmJson\Internal\Success;
 use IndianOpinion\LlmJson\Internal\Text;
@@ -284,7 +287,6 @@ final class Client
             $this->logger->log(Logger::WARNING, 'Guard repaired the output.', $this->context($state, $kept->route, $kept->attempt) + ['rule' => $repair->rule, 'path' => $repair->path]);
         }
 
-        $billed = array_map(static fn (Attempt $a): Usage => $a->usage, $state->attempts);
         $keep = $request->keepRaw();
         $result = new Result(
             $kept->guard->data,
@@ -297,7 +299,7 @@ final class Client
             $state->attempts,
             $state->skips,
             $kept->attempt->usage,
-            Usage::sum($billed),
+            $this->totalUsage($state->attempts),
             new GuardReport($kept->guard->rulesRun, $kept->guard->repairs, $state->rejections, $regenerated, $keptLabel, $regenerationFailed),
             $state->credit,
             $state->storeErrors,
@@ -466,7 +468,13 @@ final class Client
                 } else {
                     $delay = Backoff::delay($tries, $this->options->retryBaseDelay(), $cap);
                 }
-                $this->ensureTime($state, $delay);
+                if (!$this->hasTime($state, $delay)) {
+                    // Not enough time to wait and still make a useful attempt
+                    // here; the next route needs no wait, so try it instead.
+                    // If nothing later answers, the deadline is the reason.
+                    $state->deadlineHit = true;
+                    break;
+                }
                 $this->emit(Event::RETRY_SCHEDULED, new RetryScheduled($provider->name(), $route->model(), $tries, $delay, $outcome), $state);
                 $this->logger->log(Logger::WARNING, 'Retrying the same route.', $this->context($state, $route, $attempt) + ['delay' => round($delay, 3)]);
                 $this->sleeper->sleep($delay);
@@ -517,7 +525,7 @@ final class Client
             throw $e;
         } catch (\Throwable $e) {
             $outcome = Outcome::TransportError;
-            $error = new TransportException(sprintf('Transport threw %s: %s', $e::class, Text::cut($e->getMessage(), 200)), previous: $e);
+            $error = new TransportException(sprintf('Transport threw %s: %s', $e::class, Redactor::excerpt($e->getMessage(), 200, [$this->apiKeyOf($route)])), previous: $e);
         }
 
         $usage = $classified !== null ? $classified->usage : new Usage();
@@ -576,29 +584,68 @@ final class Client
             $content = trim($m[1]);
             $fence = true;
         }
-        $decoded = Json::decode($content, Json::MAX_DEPTH);
-        if ($decoded instanceof DecodeFailure) {
+        // Decoded twice: with objects, so the validator can tell {} from []
+        // and an object from an array exactly, then as arrays for the caller.
+        $tree = Json::decode($content, Json::MAX_DEPTH, false);
+        if ($tree instanceof DecodeFailure) {
             return [Outcome::Malformed, new MalformedOutputException('Output is not valid JSON (or nests deeper than 64 levels).', Text::cut($content, 200)), null, null, $fence, $content];
         }
-        if (!is_array($decoded) || !str_starts_with($content, '{')) {
+        if (!$tree instanceof \stdClass) {
             return [Outcome::SchemaViolation, new SchemaViolationException('Schema violation at /: output is not a JSON object.', ''), null, null, $fence, $content];
         }
         try {
-            $this->validator->validate($schema, $decoded);
+            $this->validator->validate($schema, $tree);
         } catch (SchemaViolationException $e) {
             return [Outcome::SchemaViolation, $e, null, null, $fence, $content];
         }
+        $decoded = Json::decode($content, Json::MAX_DEPTH);
+        if (!is_array($decoded)) {
+            return [Outcome::Malformed, new MalformedOutputException('Output could not be decoded.', Text::cut($content, 200)), null, null, $fence, $content];
+        }
         $guarded = $this->guard->run($decoded, $profile);
-        if (!$guarded->passed()) {
-            foreach ($guarded->violations as $violation) {
+        $violations = $guarded->violations;
+        if ($violations === [] && $guarded->repairs !== []) {
+            // A repair must never hand back data outside the schema (an
+            // emptied required string under minLength, a list cut under
+            // minItems). Such a repair is a rejection.
+            try {
+                $this->validator->validate($schema, $guarded->data);
+            } catch (SchemaViolationException $e) {
+                $violations = [new Violation(Rule::REQUIRED_FIELDS, $e->path(), 'the repaired output no longer matches the schema: ' . $e->getMessage())];
+            }
+        }
+        if ($violations !== []) {
+            foreach ($violations as $violation) {
                 $state->rejections[] = $violation;
                 $this->emit(Event::GUARD_REJECTED, $violation, $state);
             }
 
-            return [Outcome::GuardRejected, new GuardRejectedException($guarded->violations), null, null, $fence, $content];
+            return [Outcome::GuardRejected, new GuardRejectedException($violations), null, null, $fence, $content];
         }
 
         return [Outcome::Success, null, $decoded, $guarded, $fence, $content];
+    }
+
+    /**
+     * Sum of every attempt. When some billed attempt (a 2xx answer) has no
+     * known cost, the total cost is marked partial: it is a lower bound.
+     *
+     * @param list<Attempt> $attempts
+     */
+    private function totalUsage(array $attempts): Usage
+    {
+        $total = Usage::sum(array_map(static fn (Attempt $a): Usage => $a->usage, $attempts));
+        if ($total->cost === null) {
+            return $total;
+        }
+        foreach ($attempts as $attempt) {
+            $status = $attempt->httpStatus ?? 0;
+            if ($status >= 200 && $status < 300 && $attempt->usage->cost === null) {
+                return $total->withCost($total->cost, CostSource::Partial);
+            }
+        }
+
+        return $total;
     }
 
     private function price(Route $route, ?string $reportedModel, Usage $usage): Usage
@@ -745,10 +792,16 @@ final class Client
 
     private function ensureTime(CallState $state, float $extra): void
     {
-        $remaining = $state->deadline - ($this->clock->now() - $state->start);
-        if ($remaining - $extra < $this->options->minUsefulTime()) {
+        if (!$this->hasTime($state, $extra)) {
             throw new DeadlineReached();
         }
+    }
+
+    private function hasTime(CallState $state, float $extra): bool
+    {
+        $remaining = $state->deadline - ($this->clock->now() - $state->start);
+
+        return $remaining - $extra >= $this->options->minUsefulTime();
     }
 
     private function skip(CallState $state, Skip $skip): void

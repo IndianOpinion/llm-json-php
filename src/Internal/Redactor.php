@@ -22,7 +22,7 @@ final class Redactor
     /**
      * @param list<string> $secrets literal values to remove as well (the provider key)
      */
-    public static function excerpt(string $body, int $max, array $secrets = []): string
+    public static function excerpt(string $body, int $max, #[\SensitiveParameter] array $secrets = []): string
     {
         $body = trim($body);
         foreach ($secrets as $secret) {

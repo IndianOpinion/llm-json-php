@@ -30,7 +30,7 @@ final class ResponseReader
     private const REQUEST_ID_HEADERS = ['x-request-id', 'request-id', 'x-generation-id', 'cf-ray'];
     private const FORMAT_HINTS = ['response_format', 'json_schema', 'structured output', 'structured_output', 'structured-output'];
 
-    public function read(HttpResponse $response, Provider $provider, float $now, string $apiKeyForRedaction = ''): Classified
+    public function read(HttpResponse $response, Provider $provider, float $now, #[\SensitiveParameter] string $apiKeyForRedaction = ''): Classified
     {
         $status = $response->status;
         $body = trim($response->body);
@@ -145,6 +145,11 @@ final class ResponseReader
         if ($finish === 'length') {
             return new Classified(Outcome::Truncated, new TruncatedOutputException('Finish reason length: the output was cut off at the token cap.'), ...$common);
         }
+        if ($finish === 'error') {
+            // OpenRouter's normalised finish reason for an upstream failure
+            // during generation: whatever content came back is not trusted.
+            return new Classified(Outcome::ProviderError, new InvalidResponseException('Finish reason error: the upstream host failed during generation.'), ...$common);
+        }
         if ($finish === 'content_filter') {
             return new Classified(Outcome::ContentFilter, new ContentFilterException('Finish reason content_filter.'), ...$common);
         }
@@ -184,9 +189,10 @@ final class ResponseReader
     private function errorInSuccess(array $error, string $lower, array $json, Provider $provider, Usage $usage, ?string $id, ?string $model, ?string $requestId, array $secrets): Classified
     {
         $code = $error['code'] ?? null;
+        $code = is_scalar($code) ? (string) $code : null;
         $message = is_string($error['message'] ?? null) ? $error['message'] : 'provider error';
         $excerpt = Redactor::excerpt($message, self::ERROR_EXCERPT, $secrets);
-        if ((string) $code === '402' || $this->isCredit($lower, ['error' => $error], $provider)) {
+        if ($code === '402' || $this->isCredit($lower, ['error' => $error], $provider)) {
             return new Classified(
                 Outcome::CreditExhausted,
                 new CreditExhaustedAttemptException('Provider error inside a 200: credit exhausted.', 402, $excerpt),
@@ -200,7 +206,7 @@ final class ResponseReader
 
         return new Classified(
             Outcome::ProviderError,
-            new InvalidResponseException('Provider error inside a 200 response' . (is_scalar($code) ? ' (code ' . Text::cut((string) $code, 40) . ')' : '') . '.'),
+            new InvalidResponseException('Provider error inside a 200 response' . ($code !== null ? ' (code ' . Text::cut($code, 40) . ')' : '') . '.'),
             usage: $usage,
             responseId: $id,
             reportedModel: $model,

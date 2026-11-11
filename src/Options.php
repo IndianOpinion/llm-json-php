@@ -53,7 +53,7 @@ final class Options
 
     public function withRetryDelays(float $baseSeconds, float $maxSeconds): self
     {
-        if ($baseSeconds < 0 || $maxSeconds < $baseSeconds) {
+        if (!($baseSeconds >= 0) || !($maxSeconds >= $baseSeconds) || !is_finite($maxSeconds)) {
             throw new ConfigurationException('Retry delays need 0 <= base <= max.');
         }
         $clone = clone $this;
@@ -65,7 +65,7 @@ final class Options
 
     public function withTimeouts(float $connectSeconds, float $requestSeconds): self
     {
-        if ($connectSeconds <= 0 || $requestSeconds <= 0) {
+        if (!($connectSeconds > 0) || !($requestSeconds > 0) || !is_finite($connectSeconds) || !is_finite($requestSeconds)) {
             throw new ConfigurationException('Timeouts must be greater than zero.');
         }
         $clone = clone $this;
@@ -77,7 +77,7 @@ final class Options
 
     public function withDeadline(float $seconds, ?float $minUsefulSeconds = null): self
     {
-        if ($seconds <= 0 || ($minUsefulSeconds !== null && $minUsefulSeconds < 0)) {
+        if (!($seconds > 0) || ($minUsefulSeconds !== null && !($minUsefulSeconds >= 0))) {
             throw new ConfigurationException('Deadline must be greater than zero and the minimum useful time zero or more.');
         }
         $clone = clone $this;
