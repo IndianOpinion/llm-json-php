@@ -332,6 +332,10 @@ Design notes and every decision are in
 [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). The requirements are in
 [`docs/PRD.md`](docs/PRD.md).
 
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for setup, tests and style.
+
 ## Licence
 
 MIT. See [LICENSE](LICENSE). Copyright (c) 2026 Indian Opinion.
